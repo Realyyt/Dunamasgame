@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quiz Test</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-2 py-6 sm:px-4 sm:py-8 max-w-full sm:max-w-2xl md:max-w-3xl">
+        <div class="mb-4 sm:mb-6 text-center">
+            <h1 class="text-xl sm:text-3xl font-bold text-gray-800">Comprehensive Test</h1>
+            <p class="text-xs sm:text-base text-gray-600 mt-1 sm:mt-2">You have 60 minutes to complete all 70 questions</p>
+        </div>
+        
+        <div id="loading" class="text-center py-8 sm:py-10">
+            <div class="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-blue-700 mx-auto"></div>
+            <p class="mt-2 sm:mt-4 text-gray-700 text-xs sm:text-base">Loading questions...</p>
+        </div>
+        
+        <div id="quiz-container" class="bg-white rounded-lg shadow-md p-3 sm:p-6 mb-4 sm:mb-6 hidden">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-2 sm:mb-4 gap-2">
+                <span id="question-counter" class="text-gray-600 font-medium text-xs sm:text-base">Question 1 of 70</span>
+                <span id="timer" class="text-gray-600 font-medium text-xs sm:text-base">Time: 00:00 | Left: 06:00</span>
+            </div>
+            
+            <div id="question-container" class="mb-6 sm:mb-8">
+                <h2 id="question-text" class="text-base sm:text-xl font-semibold mb-2 sm:mb-4">Question text will appear here</h2>
+                <div id="options-container" class="space-y-2 sm:space-y-3">
+                    <!-- Options will be dynamically inserted here -->
+                </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row justify-between mt-6 sm:mt-8 gap-2">
+                <button id="prev-btn" class="w-full sm:w-auto bg-gray-300 hover:bg-gray-400 text-gray-800 font-bold py-2 px-2 sm:px-6 rounded-lg text-xs sm:text-base disabled:opacity-50 disabled:cursor-not-allowed">
+                    Previous
+                </button>
+                
+                <div class="flex flex-col sm:flex-row items-center gap-2">
+                    <span id="progress-text" class="mr-0 sm:mr-4 font-medium text-xs sm:text-base">1/70</span>
+                    <div class="w-full sm:w-40 h-2 bg-gray-200 rounded-full inline-block align-middle">
+                        <div id="progress-bar" class="h-2 bg-blue-600 rounded-full" style="width: 1.4%"></div>
+                    </div>
+                </div>
+                
+                <button id="next-btn" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 sm:px-6 rounded-lg text-xs sm:text-base">
+                    Next
+                </button>
+                
+                <button id="submit-btn" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-2 sm:px-6 rounded-lg text-xs sm:text-base hidden">
+                    Submit Answers
+                </button>
+            </div>
+        </div>
+        
+        <div id="results-container" class="bg-white rounded-lg shadow-md p-3 sm:p-6 hidden">
+            <h2 class="text-xl sm:text-2xl font-bold text-center mb-2 sm:mb-4">Test Results</h2>
+            <div class="text-center mb-6 sm:mb-8">
+                <div class="inline-block w-32 h-32 sm:w-48 sm:h-48 rounded-full border-8 border-green-500 flex items-center justify-center">
+                    <span id="score-display" class="text-3xl sm:text-5xl font-bold">0/70</span>
+                </div>
+                <p class="mt-2 sm:mt-4 text-2xl sm:text-3xl font-medium" id="percentage-display">0%</p>
+                <p id="time-used" class="mt-1 sm:mt-2 text-base sm:text-lg text-gray-700">Time used: 0min 0sec</p>
+            </div>
+            
+            <div id="detailed-results" class="space-y-2 sm:space-y-4 max-h-60 sm:max-h-96 overflow-y-auto">
+                <!-- Detailed results will be inserted here -->
+            </div>
+            
+            <div class="text-center mt-6 sm:mt-8">
+                <button id="retry-btn" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-2 sm:px-6 rounded-lg text-xs sm:text-base">
+                    Try Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let questions = [];
+        let currentQuestionIndex = 0;
+        let userAnswers = {};
+        let startTime = null;
+        let timerInterval = null;
+        let totalQuizTime = 0;
+        
+        // Timer duration in seconds (1 hr)
+        const TIMER_DURATION = 3600;
+        let timeLeft = TIMER_DURATION;
+        
+        // DOM elements
+        const loadingEl = document.getElementById('loading');
+        const quizContainerEl = document.getElementById('quiz-container');
+        const resultsContainerEl = document.getElementById('results-container');
+        const questionTextEl = document.getElementById('question-text');
+        const optionsContainerEl = document.getElementById('options-container');
+        const questionCounterEl = document.getElementById('question-counter');
+        const prevBtnEl = document.getElementById('prev-btn');
+        const nextBtnEl = document.getElementById('next-btn');
+        const submitBtnEl = document.getElementById('submit-btn');
+        const retryBtnEl = document.getElementById('retry-btn');
+        const progressBarEl = document.getElementById('progress-bar');
+        const progressTextEl = document.getElementById('progress-text');
+        const timerEl = document.getElementById('timer');
+        
+        // Fetch questions from API
+        async function fetchQuestions() {
+            try {
+                const response = await fetch('/api/practice/questions/submit');
+                if (!response.ok) {
+                    throw new Error('Failed to fetch questions');
+                }
+                questions = await response.json();
+                
+                // Hide loading and show quiz
+                loadingEl.classList.add('hidden');
+                quizContainerEl.classList.remove('hidden');
+                
+                // Display first question
+                displayQuestion(0);
+                startTimer();
+                
+                // Update button states
+                updateButtonStates();
+            } catch (error) {
+                console.error('Error:', error);
+                loadingEl.innerHTML = `<p class="text-red-600">Error loading questions: ${error.message}</p>`;
+            }
+        }
+        
+        // Display a question by index
+        function displayQuestion(index) {
+            const question = questions[index];
+            questionTextEl.textContent = question.question;
+            
+            // Clear options container
+            optionsContainerEl.innerHTML = '';
+            
+            // Add options
+            question.options.forEach(option => {
+                const optionEl = document.createElement('div');
+                optionEl.className = 'flex items-center space-x-2 sm:space-x-3 p-2 sm:p-3 border rounded-lg transition-colors hover:bg-gray-50 w-full';
+                
+                // Set selected state if user has already answered
+                if (userAnswers[question.question_no] === option.label) {
+                    optionEl.classList.add('bg-blue-50', 'border-blue-300');
+                }
+                
+                optionEl.innerHTML = `
+                    <input type="radio" name="q${question.question_no}" id="option-${option.label}" 
+                           class="form-radio h-4 w-4 sm:h-5 sm:w-5 text-blue-600" value="${option.label}"
+                           ${userAnswers[question.question_no] === option.label ? 'checked' : ''}>
+                    <label for="option-${option.label}" class="flex-1 cursor-pointer text-xs sm:text-base">
+                        <span class="font-medium">${option.label}.</span> ${option.text}
+                    </label>
+                `;
+                
+                optionEl.addEventListener('click', () => {
+                    // Set user answer
+                    userAnswers[question.question_no] = option.label;
+                    
+                    // Update UI to show selected option
+                    document.querySelectorAll('#options-container > div').forEach(el => {
+                        el.classList.remove('bg-blue-50', 'border-blue-300');
+                    });
+                    optionEl.classList.add('bg-blue-50', 'border-blue-300');
+                    
+                    // Check the radio input
+                    const radioInput = optionEl.querySelector('input[type="radio"]');
+                    radioInput.checked = true;
+                    
+                    // Update button states
+                    updateButtonStates();
+                });
+                
+                optionsContainerEl.appendChild(optionEl);
+            });
+            
+            // Update question counter
+            questionCounterEl.textContent = `Question ${index + 1} of ${questions.length}`;
+            
+            // Update progress
+            progressBarEl.style.width = `${((index + 1) / questions.length) * 100}%`;
+            progressTextEl.textContent = `${index + 1}/${questions.length}`;
+            
+            // Update current question index
+            currentQuestionIndex = index;
+        }
+        
+        // Update the state of navigation buttons
+        function updateButtonStates() {
+            // Disable/enable previous button based on current question
+            prevBtnEl.disabled = currentQuestionIndex === 0;
+            
+            // Show "Next" or "Submit" based on question index
+            if (currentQuestionIndex === questions.length - 1) {
+                nextBtnEl.classList.add('hidden');
+                submitBtnEl.classList.remove('hidden');
+                
+                // Always enable submit button on last question
+                submitBtnEl.disabled = false;
+                submitBtnEl.classList.remove('opacity-50', 'cursor-not-allowed');
+                console.log('Submit button should be visible and enabled');
+            } else {
+                nextBtnEl.classList.remove('hidden');
+                submitBtnEl.classList.add('hidden');
+            }
+        }
+        
+        // Check if all questions have been answered
+        function areAllQuestionsAnswered() {
+            return questions.every(q => userAnswers[q.question_no] !== undefined);
+        }
+        
+        // Start the timer
+        function startTimer() {
+            startTime = new Date();
+            timeLeft = TIMER_DURATION;
+            updateTimer(); // Show initial time
+            timerInterval = setInterval(updateTimer, 1000);
+        }
+        
+        // Update the timer display
+        function updateTimer() {
+            const currentTime = new Date();
+            const elapsedTime = Math.floor((currentTime - startTime) / 1000);
+            timeLeft = Math.max(0, TIMER_DURATION - elapsedTime);
+
+            // Calculate minutes and seconds for elapsed and left
+            const minutesElapsed = Math.floor(elapsedTime / 60).toString().padStart(2, '0');
+            const secondsElapsed = (elapsedTime % 60).toString().padStart(2, '0');
+            const minutesLeft = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const secondsLeft = (timeLeft % 60).toString().padStart(2, '0');
+
+            // Display both elapsed and left
+            timerEl.textContent = `Time: ${minutesElapsed}:${secondsElapsed} | Left: ${minutesLeft}:${secondsLeft}`;
+
+            // Store the total time for results
+            totalQuizTime = elapsedTime;
+
+            // Reset timer color
+            timerEl.classList.remove('text-yellow-500', 'text-red-600', 'animate-pulse');
+
+            // Notify at 1 minute left
+            if (timeLeft === 60) {
+                alert('Only 1 minute left!');
+            }
+
+            // Change color at 30 seconds left
+            if (timeLeft <= 30 && timeLeft > 10) {
+                timerEl.classList.add('text-yellow-500', 'animate-pulse');
+            }
+            // Change color at 10 seconds left
+            else if (timeLeft <= 10) {
+                timerEl.classList.remove('text-yellow-500');
+                timerEl.classList.add('text-red-600', 'animate-pulse');
+            }
+
+            // Auto-submit when time runs out
+            if (timeLeft === 0) {
+                clearInterval(timerInterval);
+                alert('Time is up! Submitting your test.');
+                submitQuiz();
+            }
+        }
+        
+        // Submit the quiz
+        async function submitQuiz() {
+            // Stop the timer
+            clearInterval(timerInterval);
+            
+            // Log to debug
+            console.log('Submit button clicked');
+            console.log('User answers:', userAnswers);
+            console.log('Questions length:', questions.length);
+            console.log('Questions answered:', Object.keys(userAnswers).length);
+            console.log('Total time used:', totalQuizTime);
+            
+            try {
+                const response = await fetch('/api/practice/questions/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ answers: userAnswers })
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to submit test');
+                }
+                
+                const results = await response.json();
+                displayResults(results);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to submit test: ' + error.message);
+                
+                // Re-enable the submit button in case of error
+                submitBtnEl.disabled = false;
+                submitBtnEl.classList.remove('opacity-50', 'cursor-not-allowed');
+                submitBtnEl.textContent = 'Submit Answers';
+            }
+        }
+        
+        // Display quiz results
+        function displayResults(results) {
+            // Hide quiz containers and show results
+            quizContainerEl.classList.add('hidden');
+            resultsContainerEl.classList.remove('hidden');
+            
+            // Update score display
+            document.getElementById('score-display').textContent = `${results.score}/${results.total}`;
+            document.getElementById('percentage-display').textContent = `${results.percentage.toFixed(0)}%`;
+            
+            // Display time spent in a more readable format
+            const hours = Math.floor(totalQuizTime / 3600);
+            const minutes = Math.floor((totalQuizTime % 3600) / 60);
+            const seconds = totalQuizTime % 60;
+            
+            let timeUsedText = '';
+            if (hours > 0) {
+                timeUsedText = `Time used: ${hours}hr ${minutes}min ${seconds}sec`;
+            } else {
+                timeUsedText = `Time used: ${minutes}min ${seconds}sec`;
+            }
+            
+            document.getElementById('time-used').textContent = timeUsedText;
+            
+            // Set score circle color based on percentage
+            const scoreCircle = document.querySelector('#score-display').parentElement;
+            if (results.percentage >= 80) {
+                scoreCircle.classList.remove('border-green-500', 'border-yellow-500', 'border-red-500');
+                scoreCircle.classList.add('border-green-500');
+            } else if (results.percentage >= 60) {
+                scoreCircle.classList.remove('border-green-500', 'border-yellow-500', 'border-red-500');
+                scoreCircle.classList.add('border-yellow-500');
+            } else {
+                scoreCircle.classList.remove('border-green-500', 'border-yellow-500', 'border-red-500');
+                scoreCircle.classList.add('border-red-500');
+            }
+            
+            // Display detailed results
+            const detailedResultsEl = document.getElementById('detailed-results');
+            detailedResultsEl.innerHTML = '';
+            
+            results.results.forEach(result => {
+                const resultEl = document.createElement('div');
+                resultEl.className = 'p-4 border rounded-lg mb-2';
+                
+                // Add appropriate background color based on correctness
+                if (result.is_correct) {
+                    resultEl.classList.add('bg-green-50', 'border-green-200');
+                } else {
+                    resultEl.classList.add('bg-red-50', 'border-red-200');
+                }
+                
+                resultEl.innerHTML = `
+                    <p class="font-medium">Question ${result.question_no}: ${result.question}</p>
+                    <div class="mt-2 flex justify-between text-sm">
+                        <span>Your answer: <strong>${result.user_answer || 'Not answered'}</strong></span>
+                        <span>Correct answer: <strong>${result.correct_answer}</strong></span>
+                    </div>
+                    <div class="mt-1 text-right">
+                        <span class="${result.is_correct ? 'text-green-600' : 'text-red-600'} font-medium">
+                            ${result.is_correct ? 'Correct' : 'Incorrect'}
+                        </span>
+                    </div>
+                `;
+                
+                detailedResultsEl.appendChild(resultEl);
+            });
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize quiz
+            fetchQuestions();
+            
+            // Make sure submit button has click listener
+            submitBtnEl.onclick = function() {
+                console.log('Submit button clicked via onclick');
+                submitQuiz();
+            };
+        });
+        
+        prevBtnEl.addEventListener('click', () => {
+            if (currentQuestionIndex > 0) {
+                displayQuestion(currentQuestionIndex - 1);
+                updateButtonStates();
+            }
+        });
+        
+        nextBtnEl.addEventListener('click', () => {
+            if (currentQuestionIndex < questions.length - 1) {
+                displayQuestion(currentQuestionIndex + 1);
+                updateButtonStates();
+            }
+        });
+        
+        // Replace existing submit button listener with a more direct approach
+        submitBtnEl.onclick = function() {
+            console.log('Submit button clicked via onclick');
+            submitQuiz();
+        };
+        
+        retryBtnEl.addEventListener('click', () => {
+            // Reset variables
+            userAnswers = {};
+            currentQuestionIndex = 0;
+            
+            // Hide results and show quiz
+            resultsContainerEl.classList.add('hidden');
+            quizContainerEl.classList.remove('hidden');
+            
+            // Display first question
+            displayQuestion(0);
+            startTimer();
+            
+            // Update button states
+            updateButtonStates();
+        });
+        
+        // Listen for keyboard events for option selection (A-D)
+        document.addEventListener('keydown', function(event) {
+            // Only respond if quiz is visible and not in results
+            if (quizContainerEl.classList.contains('hidden') || resultsContainerEl.classList.contains('block')) return;
+
+            // Map keys a-d/A-D to option labels
+            const key = event.key.toLowerCase();
+            if (key >= 'a' && key <= 'd') {
+                const question = questions[currentQuestionIndex];
+                // Find the option with the matching label
+                const option = question.options.find(opt => opt.label.toLowerCase() === key);
+                if (option) {
+                    // Set user answer
+                    userAnswers[question.question_no] = option.label;
+
+                    // Update UI to show selected option
+                    document.querySelectorAll('#options-container > div').forEach(el => {
+                        el.classList.remove('bg-blue-50', 'border-blue-300');
+                    });
+                    // Find the corresponding option element and update
+                    const optionEl = document.querySelector(`#option-${option.label}`)?.closest('div');
+                    if (optionEl) {
+                        optionEl.classList.add('bg-blue-50', 'border-blue-300');
+                        const radioInput = optionEl.querySelector('input[type="radio"]');
+                        radioInput.checked = true;
+                    }
+                    // Update button states
+                    updateButtonStates();
+                }
+            }
+            
+            // Navigation with arrow keys
+            if (event.key === 'ArrowLeft' && !prevBtnEl.disabled) {
+                prevBtnEl.click();
+            } else if (event.key === 'ArrowRight' && !nextBtnEl.classList.contains('hidden')) {
+                nextBtnEl.click();
+            }
+        });
+    </script>
+</body>
+</html>
