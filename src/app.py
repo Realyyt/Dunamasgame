@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, redirect, url_for
 from flask_migrate import Migrate
 from src.config import Config
 from src.db.core import db
@@ -10,12 +10,14 @@ def create_app():
     db.init_app(app)
     migrate = Migrate(app, db)
 
+    @app.route('/')
+    def index():
+        return redirect(url_for('auth.login'))
 
     with app.app_context():
         # Import models
         from src.db.models.quiz_db import User, Questions, Options, Answers, Response
     
-
         # Import blueprints
         from src.api.models.quiz_route import quiz_bp
         from src.api.models.demoRun import demo_bp
@@ -30,7 +32,6 @@ def create_app():
         app.register_blueprint(practice_bp)
         app.register_blueprint(comprehensive_bp)
         app.register_blueprint(google_bp)
-
 
     return app
 
