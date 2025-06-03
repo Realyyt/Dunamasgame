@@ -13,5 +13,5 @@ class Config:
     # Google OAuth2 config
     GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET")
-    # Use environment variable for redirect URI, fallback to localhost for development
-    GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "https://dunamasgame.vercel.app/login/google/authorized")
+    # Use environment variable for redirect URI, fallback to production URL
+    GOOGLE_REDIRECT_URI = os.getenv("GOOGLE_REDIRECT_URI", "https://dunamasgame.vercel.app/google/authorized")
